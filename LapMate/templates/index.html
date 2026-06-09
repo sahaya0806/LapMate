@@ -1,0 +1,935 @@
+453.<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Laptop Recommender — Find Your Perfect Laptop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0b1a;
+  --card-bg:#1a1d3e;
+  --primary:#4f46e5;
+  --primary-hover:#4338ca;
+  --accent:#a78bfa;
+  --green:#34d399;
+  --amber:#f59e0b;
+  --text:#e2e8f0;
+  --text-muted:#94a3b8;
+  --border:#2d3166;
+  --glow:rgba(79,70,229,0.4);
+  --transition:400ms cubic-bezier(0.4,0,0.2,1);
+}
+html,body{height:100%;overflow:hidden;font-family:'Inter',sans-serif;background:var(--bg);color:var(--text)}
+
+/* ── Wizard shell ── */
+#wizard{position:relative;width:100%;height:100vh;overflow:hidden}
+.slide{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:2rem;
+  transform:translateX(100%);
+  transition:transform var(--transition);
+  will-change:transform;
+  overflow-y:auto;
+}
+.slide.active{transform:translateX(0)}
+.slide.exit-left{transform:translateX(-100%)}
+
+/* ── Progress dots ── */
+#progress-dots{
+  position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);
+  display:flex;gap:.6rem;z-index:100;
+}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:all .3s ease;cursor:pointer}
+.dot.active{background:var(--primary);width:24px;border-radius:4px}
+.dot.done{background:var(--accent)}
+
+/* ── Particles canvas ── */
+#particles-canvas{position:fixed;inset:0;pointer-events:none;z-index:0}
+
+/* ── Slide 0 — Welcome ── */
+#slide-0{background:linear-gradient(135deg,#0a0b1a 0%,#1a0533 100%);z-index:1}
+.welcome-content{position:relative;z-index:2;text-align:center;max-width:680px}
+.laptop-emoji{font-size:5rem;display:block;margin-bottom:1.5rem;animation:float 3s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-16px)}}
+.welcome-title{
+  font-size:clamp(2.2rem,5vw,3.8rem);font-weight:900;line-height:1.1;
+  background:linear-gradient(135deg,#fff 0%,var(--accent) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:1rem;
+}
+.welcome-sub{font-size:1.15rem;color:var(--text-muted);line-height:1.7;margin-bottom:2.5rem;font-weight:400}
+.btn-glow{
+  display:inline-flex;align-items:center;gap:.6rem;
+  padding:.9rem 2.4rem;border-radius:50px;border:none;cursor:pointer;
+  font-size:1.1rem;font-weight:700;font-family:'Inter',sans-serif;
+  background:linear-gradient(135deg,var(--primary),#7c3aed);
+  color:#fff;
+  box-shadow:0 0 30px var(--glow),0 4px 20px rgba(0,0,0,.4);
+  transition:all .3s ease;position:relative;overflow:hidden;
+}
+.btn-glow::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,.15),transparent);
+  opacity:0;transition:opacity .3s;
+}
+.btn-glow:hover{transform:translateY(-2px);box-shadow:0 0 50px var(--glow),0 8px 30px rgba(0,0,0,.5)}
+.btn-glow:hover::before{opacity:1}
+.btn-glow:active{transform:translateY(0)}
+
+/* fade-in on load */
+.fade-in{animation:fadeIn .8s ease forwards}
+@keyframes fadeIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+.fade-in-delay-1{animation:fadeIn .8s .2s ease both}
+.fade-in-delay-2{animation:fadeIn .8s .4s ease both}
+.fade-in-delay-3{animation:fadeIn .8s .6s ease both}
+
+/* ── Shared slide styles ── */
+.slide-inner{width:100%;max-width:900px;margin:0 auto}
+.q-title{
+  font-size:clamp(1.8rem,4vw,2.8rem);font-weight:800;text-align:center;
+  margin-bottom:.5rem;
+  background:linear-gradient(135deg,#fff,var(--accent));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.q-sub{text-align:center;color:var(--text-muted);font-size:1rem;margin-bottom:2.5rem;font-weight:400}
+
+/* ── Option cards grid ── */
+.cards-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:1rem;
+}
+.option-card{
+  background:var(--card-bg);border:2px solid var(--border);border-radius:16px;
+  padding:1.5rem 1rem;cursor:pointer;text-align:center;
+  transition:all .25s ease;position:relative;overflow:hidden;
+  display:flex;flex-direction:column;align-items:center;gap:.6rem;
+}
+.option-card::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(79,70,229,.15),rgba(167,139,250,.1));
+  opacity:0;transition:opacity .25s;
+}
+.option-card:hover{border-color:var(--primary);transform:translateY(-4px);box-shadow:0 8px 30px rgba(79,70,229,.3)}
+.option-card:hover::before{opacity:1}
+.option-card.selected{
+  border-color:var(--accent);
+  background:linear-gradient(135deg,rgba(79,70,229,.25),rgba(167,139,250,.15));
+  box-shadow:0 0 30px rgba(167,139,250,.4);
+}
+.option-card.selected::before{opacity:1}
+.card-icon{font-size:2.2rem;line-height:1}
+.card-label{font-size:.95rem;font-weight:700;color:var(--text)}
+.card-desc{font-size:.78rem;color:var(--text-muted);line-height:1.4}
+
+/* ── Skip link ── */
+.skip-link{
+  display:block;text-align:right;margin-top:1.2rem;
+  color:var(--text-muted);font-size:.9rem;cursor:pointer;
+  text-decoration:underline;text-underline-offset:3px;
+  transition:color .2s;
+}
+.skip-link:hover{color:var(--accent)}
+
+/* ── Brand pills ── */
+.pills-wrap{display:flex;flex-wrap:wrap;gap:.7rem;justify-content:center;margin-bottom:2rem}
+.pill{
+  padding:.5rem 1.2rem;border-radius:50px;border:2px solid var(--border);
+  background:var(--card-bg);cursor:pointer;font-size:.9rem;font-weight:600;
+  color:var(--text-muted);transition:all .2s ease;
+}
+.pill:hover{border-color:var(--primary);color:var(--text)}
+.pill.selected{
+  border-color:var(--accent);background:rgba(167,139,250,.2);
+  color:var(--accent);box-shadow:0 0 15px rgba(167,139,250,.3);
+}
+
+/* ── Engine cards ── */
+.engine-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-bottom:2rem}
+.engine-card{
+  background:var(--card-bg);border:2px solid var(--border);border-radius:20px;
+  padding:2rem 1.5rem;cursor:pointer;text-align:center;
+  transition:all .25s ease;position:relative;
+}
+.engine-card:hover{border-color:var(--primary);transform:translateY(-4px);box-shadow:0 8px 30px rgba(79,70,229,.3)}
+.engine-card.selected{border-color:var(--accent);box-shadow:0 0 30px rgba(167,139,250,.4)}
+.engine-icon{font-size:3rem;margin-bottom:1rem}
+.engine-title{font-size:1.2rem;font-weight:800;margin-bottom:.5rem}
+.engine-desc{font-size:.85rem;color:var(--text-muted);line-height:1.6}
+.badge-rec{
+  display:inline-block;padding:.2rem .7rem;border-radius:50px;
+  background:linear-gradient(135deg,var(--amber),#f97316);
+  color:#000;font-size:.7rem;font-weight:800;margin-top:.7rem;
+  text-transform:uppercase;letter-spacing:.05em;
+}
+
+/* ── Count toggle ── */
+.count-toggle{display:flex;gap:.5rem;justify-content:center;margin-bottom:2rem}
+.count-btn{
+  padding:.5rem 1.4rem;border-radius:50px;border:2px solid var(--border);
+  background:var(--card-bg);cursor:pointer;font-size:.95rem;font-weight:700;
+  color:var(--text-muted);transition:all .2s;font-family:'Inter',sans-serif;
+}
+.count-btn:hover{border-color:var(--primary);color:var(--text)}
+.count-btn.selected{border-color:var(--accent);background:rgba(167,139,250,.2);color:var(--accent)}
+
+/* ── Find button ── */
+.find-btn{
+  display:flex;align-items:center;justify-content:center;gap:.6rem;
+  width:100%;max-width:340px;margin:0 auto;
+  padding:1rem 2rem;border-radius:50px;border:none;cursor:pointer;
+  font-size:1.1rem;font-weight:800;font-family:'Inter',sans-serif;
+  background:linear-gradient(135deg,var(--primary),#7c3aed);
+  color:#fff;box-shadow:0 0 30px var(--glow);
+  transition:all .3s ease;
+  opacity:0;pointer-events:none;transform:translateY(10px);
+}
+.find-btn.visible{opacity:1;pointer-events:all;transform:translateY(0)}
+.find-btn:hover{transform:translateY(-2px);box-shadow:0 0 50px var(--glow)}
+
+/* ── Loading slide ── */
+#slide-5{background:linear-gradient(135deg,#0a0b1a,#1a0533)}
+.loader-wrap{text-align:center}
+.spinner{font-size:5rem;display:block;margin:0 auto 2rem;animation:spin 1.5s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.loader-text{font-size:1.4rem;font-weight:600;color:var(--text-muted)}
+.loader-count{color:var(--accent);font-weight:800}
+
+/* ── Results slide ── */
+#slide-6{
+  background:var(--bg);
+  align-items:stretch;justify-content:flex-start;
+  padding:0;overflow-y:auto;
+}
+.results-header{
+  position:sticky;top:0;z-index:50;
+  background:rgba(10,11,26,.9);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:1rem 2rem;
+  display:flex;align-items:center;gap:1rem;flex-wrap:wrap;
+}
+.back-btn{
+  background:none;border:2px solid var(--border);border-radius:50%;
+  width:40px;height:40px;cursor:pointer;color:var(--text);
+  font-size:1.1rem;display:flex;align-items:center;justify-content:center;
+  transition:all .2s;flex-shrink:0;
+}
+.back-btn:hover{border-color:var(--primary);color:var(--accent)}
+.summary-pills{display:flex;gap:.5rem;flex-wrap:wrap;flex:1}
+.summary-pill{
+  padding:.3rem .8rem;border-radius:50px;
+  background:rgba(79,70,229,.2);border:1px solid rgba(79,70,229,.4);
+  font-size:.8rem;font-weight:600;color:var(--accent);
+}
+.mode-pill{padding:.3rem .9rem;border-radius:50px;font-size:.8rem;font-weight:700}
+.mode-pill.rule{background:rgba(245,158,11,.2);border:1px solid var(--amber);color:var(--amber)}
+.mode-pill.ml{background:rgba(52,211,153,.2);border:1px solid var(--green);color:var(--green)}
+.mode-pill.denstream{background:rgba(6,182,212,.2);border:1px solid #06b6d4;color:#06b6d4}
+.results-body{padding:2rem;max-width:1400px;margin:0 auto;width:100%}
+.results-count{font-size:1rem;color:var(--text-muted);margin-bottom:1.5rem;font-weight:500}
+.results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1.5rem}
+
+/* ── Laptop card ── */
+.laptop-card{
+  background:var(--card-bg);border:2px solid var(--border);border-radius:20px;
+  overflow:hidden;transition:all .3s ease;cursor:default;
+  display:flex;flex-direction:column;
+}
+.laptop-card:hover{
+  transform:translateY(-6px);
+  border-color:var(--primary);
+  box-shadow:0 12px 40px rgba(79,70,229,.35);
+}
+.card-img{width:100%;height:160px;object-fit:cover;background:#111}
+.card-body{padding:1.2rem;flex:1;display:flex;flex-direction:column;gap:.7rem}
+.card-brand{
+  display:inline-block;padding:.2rem .7rem;border-radius:50px;
+  background:rgba(79,70,229,.25);border:1px solid rgba(79,70,229,.5);
+  font-size:.72rem;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;
+}
+.card-name{font-size:.95rem;font-weight:700;line-height:1.4;color:var(--text)}
+.card-price{font-size:1.3rem;font-weight:800;color:var(--green)}
+.spec-tags{display:flex;flex-wrap:wrap;gap:.4rem}
+.spec-tag{
+  padding:.25rem .6rem;border-radius:6px;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
+  font-size:.72rem;font-weight:600;color:var(--text-muted);
+}
+.ml-bar-wrap{margin-top:.3rem}
+.ml-bar-label{font-size:.75rem;color:var(--text-muted);margin-bottom:.3rem;display:flex;justify-content:space-between}
+.ml-bar-track{height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden}
+.ml-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--primary),var(--accent));transition:width .8s ease}
+
+/* ── Start over ── */
+.start-over-wrap{text-align:center;padding:2rem 0 3rem}
+.start-over-btn{
+  padding:.8rem 2rem;border-radius:50px;border:2px solid var(--border);
+  background:transparent;color:var(--text-muted);cursor:pointer;
+  font-size:1rem;font-weight:600;font-family:'Inter',sans-serif;
+  transition:all .3s;
+}
+.start-over-btn:hover{border-color:var(--primary);color:var(--text);background:rgba(79,70,229,.1)}
+
+/* ── No results ── */
+.no-results{text-align:center;padding:4rem 2rem;color:var(--text-muted)}
+.no-results-icon{font-size:4rem;margin-bottom:1rem}
+
+/* ── Responsive ── */
+@media(max-width:600px){
+  .engine-grid{grid-template-columns:1fr}
+  .cards-grid{grid-template-columns:repeat(2,1fr)}
+  .results-header{padding:.8rem 1rem}
+  .results-body{padding:1rem}
+}
+@media(max-width:400px){
+  .cards-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<canvas id="particles-canvas"></canvas>
+<div id="wizard">
+
+  <!-- ══════════════════════════════════════════
+       SLIDE 0 — Welcome
+  ══════════════════════════════════════════ -->
+  <section class="slide active" id="slide-0">
+    <div class="welcome-content">
+      <span class="laptop-emoji fade-in">💻</span>
+      <h1 class="welcome-title fade-in-delay-1">Find Your Perfect Laptop</h1>
+      <p class="welcome-sub fade-in-delay-2">Answer a few quick questions and we'll match you with the best laptop using AI</p>
+      <button class="btn-glow fade-in-delay-3" id="get-started-btn">
+        Get Started <span>→</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+       SLIDE 1 — Who are you?
+  ══════════════════════════════════════════ -->
+  <section class="slide" id="slide-1">
+    <div class="slide-inner">
+      <h2 class="q-title">Who are you?</h2>
+      <p class="q-sub">This helps us understand your needs</p>
+      <div class="cards-grid" id="user-type-grid">
+        <div class="option-card" data-value="Student">
+          <span class="card-icon">🎓</span>
+          <span class="card-label">Student</span>
+          <span class="card-desc">Learning &amp; academics</span>
+        </div>
+        <div class="option-card" data-value="Employee">
+          <span class="card-icon">💼</span>
+          <span class="card-label">Employee</span>
+          <span class="card-desc">Work &amp; productivity</span>
+        </div>
+        <div class="option-card" data-value="Gamer">
+          <span class="card-icon">🎮</span>
+          <span class="card-label">Gamer</span>
+          <span class="card-desc">High performance gaming</span>
+        </div>
+        <div class="option-card" data-value="Normal User">
+          <span class="card-icon">👤</span>
+          <span class="card-label">Normal User</span>
+          <span class="card-desc">Everyday browsing &amp; tasks</span>
+        </div>
+        <div class="option-card" data-value="Staff">
+          <span class="card-icon">🏫</span>
+          <span class="card-label">Staff</span>
+          <span class="card-desc">Office &amp; administration</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+       SLIDE 2 — Domain
+  ══════════════════════════════════════════ -->
+  <section class="slide" id="slide-2">
+    <div class="slide-inner">
+      <h2 class="q-title">What's your primary use?</h2>
+      <p class="q-sub">We'll fine-tune specs for your workflow</p>
+      <div class="cards-grid" id="domain-grid">
+        <div class="option-card" data-value="AIML">
+          <span class="card-icon">🤖</span>
+          <span class="card-label">AI / ML</span>
+          <span class="card-desc">Machine learning &amp; AI</span>
+        </div>
+        <div class="option-card" data-value="Gaming">
+          <span class="card-icon">🎮</span>
+          <span class="card-label">Gaming</span>
+          <span class="card-desc">High-fps gaming</span>
+        </div>
+        <div class="option-card" data-value="Design">
+          <span class="card-icon">🎨</span>
+          <span class="card-label">Design</span>
+          <span class="card-desc">Creative &amp; visual work</span>
+        </div>
+        <div class="option-card" data-value="Engineering">
+          <span class="card-icon">⚙️</span>
+          <span class="card-label">Engineering</span>
+          <span class="card-desc">CAD &amp; simulations</span>
+        </div>
+        <div class="option-card" data-value="Arts and Science">
+          <span class="card-icon">🔬</span>
+          <span class="card-label">Arts &amp; Science</span>
+          <span class="card-desc">Research &amp; studies</span>
+        </div>
+        <div class="option-card" data-value="Software">
+          <span class="card-icon">💻</span>
+          <span class="card-label">Software Dev</span>
+          <span class="card-desc">Coding &amp; development</span>
+        </div>
+        <div class="option-card" data-value="Data Science">
+          <span class="card-icon">📊</span>
+          <span class="card-label">Data Science</span>
+          <span class="card-desc">Analytics &amp; notebooks</span>
+        </div>
+        <div class="option-card" data-value="Business">
+          <span class="card-icon">💼</span>
+          <span class="card-label">Business</span>
+          <span class="card-desc">Spreadsheets &amp; meetings</span>
+        </div>
+        <div class="option-card" data-value="Video Editing">
+          <span class="card-icon">🎬</span>
+          <span class="card-label">Video Editing</span>
+          <span class="card-desc">Rendering &amp; editing</span>
+        </div>
+        <div class="option-card" data-value="General">
+          <span class="card-icon">📚</span>
+          <span class="card-label">General</span>
+          <span class="card-desc">All-round use</span>
+        </div>
+      </div>
+      <span class="skip-link" id="skip-domain">Skip →</span>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+       SLIDE 3 — Brand
+  ══════════════════════════════════════════ -->
+  <section class="slide" id="slide-3">
+    <div class="slide-inner">
+      <h2 class="q-title">Any brand preference?</h2>
+      <p class="q-sub">Or we'll search across all brands</p>
+      <div class="pills-wrap" id="brand-pills">
+        <div class="pill selected" data-value="">All Brands</div>
+        <!-- brands loaded from API -->
+      </div>
+      <button class="btn-glow" id="brand-continue-btn" style="display:flex;margin:0 auto;">
+        Continue →
+      </button>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+       SLIDE 4 — Engine
+  ══════════════════════════════════════════ -->
+  <section class="slide" id="slide-4">
+    <div class="slide-inner">
+      <h2 class="q-title">How should we find your laptop?</h2>
+      <p class="q-sub">Choose your recommendation engine</p>
+      <div class="engine-grid">
+        <div class="engine-card" id="engine-rule" data-value="rule">
+          <div class="engine-icon">📋</div>
+          <div class="engine-title">Rule-Based</div>
+          <div class="engine-desc">Fast, deterministic scoring based on your profile specs</div>
+        </div>
+        <div class="engine-card" id="engine-ml" data-value="ml">
+          <div class="engine-icon">🤖</div>
+          <div class="engine-title">ML Engine</div>
+          <div class="engine-desc">KNN + Cosine Similarity + TF-IDF for smarter matching</div>
+          <div class="badge-rec">⭐ Recommended</div>
+        </div>
+        <div class="engine-card" id="engine-denstream" data-value="denstream">
+          <div class="engine-icon">🌊</div>
+          <div class="engine-title">DenStream</div>
+          <div class="engine-desc">Stream clustering finds real data patterns — centroid-enhanced KNN + Cosine Similarity</div>
+          <div class="badge-rec" style="background:linear-gradient(135deg,#06b6d4,#0891b2)">🔬 Advanced</div>
+        </div>
+      </div>
+      <p class="q-sub" style="margin-bottom:1rem">How many results?</p>
+      <div class="count-toggle">
+        <button class="count-btn" data-value="6">6</button>
+        <button class="count-btn selected" data-value="12">12</button>
+        <button class="count-btn" data-value="24">24</button>
+      </div>
+      <button class="find-btn" id="find-btn">Find My Laptop →</button>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+       SLIDE 5 — Loading
+  ══════════════════════════════════════════ -->
+  <section class="slide" id="slide-5">
+    <div class="loader-wrap">
+      <span class="spinner" id="spinner-emoji">💻</span>
+      <p class="loader-text">Analysing <span class="loader-count" id="loader-count">0</span> laptops for you…</p>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+       SLIDE 6 — Results
+  ══════════════════════════════════════════ -->
+  <section class="slide" id="slide-6">
+    <div class="results-header">
+      <button class="back-btn" id="back-to-start" title="Start over">←</button>
+      <div class="summary-pills" id="summary-pills"></div>
+      <span class="mode-pill" id="mode-pill"></span>
+    </div>
+    <div class="results-body">
+      <p class="results-count" id="results-count"></p>
+      <div class="results-grid" id="results-grid"></div>
+      <div class="start-over-wrap">
+        <button class="start-over-btn" id="start-over-btn">↺ Start Over</button>
+      </div>
+    </div>
+  </section>
+
+</div><!-- #wizard -->
+
+<!-- Progress dots (slides 1–4) -->
+<div id="progress-dots">
+  <div class="dot" data-slide="1"></div>
+  <div class="dot" data-slide="2"></div>
+  <div class="dot" data-slide="3"></div>
+  <div class="dot" data-slide="4"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   PARTICLES / STARS BACKGROUND
+═══════════════════════════════════════════════════════════ */
+(function initParticles() {
+  const canvas = document.getElementById('particles-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, stars = [];
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function createStars(n) {
+    stars = [];
+    for (let i = 0; i < n; i++) {
+      stars.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: Math.random() * 1.5 + 0.3,
+        alpha: Math.random() * 0.7 + 0.1,
+        speed: Math.random() * 0.3 + 0.05,
+        drift: (Math.random() - 0.5) * 0.2,
+        twinkleSpeed: Math.random() * 0.02 + 0.005,
+        twinkleDir: 1,
+      });
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    stars.forEach(s => {
+      s.alpha += s.twinkleSpeed * s.twinkleDir;
+      if (s.alpha >= 0.8 || s.alpha <= 0.05) s.twinkleDir *= -1;
+      s.y -= s.speed;
+      s.x += s.drift;
+      if (s.y < -2) { s.y = H + 2; s.x = Math.random() * W; }
+      if (s.x < -2) s.x = W + 2;
+      if (s.x > W + 2) s.x = -2;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(167,139,250,${s.alpha})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+
+  resize();
+  createStars(180);
+  draw();
+  window.addEventListener('resize', () => { resize(); createStars(180); });
+})();
+
+/* ═══════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════ */
+const state = {
+  currentSlide: 0,
+  userType: null,
+  domain: null,
+  brand: null,
+  engine: null,
+  maxResults: 12,
+};
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE NAVIGATION
+═══════════════════════════════════════════════════════════ */
+function goTo(index) {
+  const slides = document.querySelectorAll('.slide');
+  const current = document.querySelector('.slide.active');
+  const target = document.getElementById('slide-' + index);
+  if (!target || current === target) return;
+
+  const currentIndex = parseInt(current.id.replace('slide-', ''));
+  const forward = index > currentIndex;
+
+  // Position target off-screen in the correct direction
+  target.style.transition = 'none';
+  target.style.transform = forward ? 'translateX(100%)' : 'translateX(-100%)';
+  target.classList.remove('active', 'exit-left');
+
+  // Force reflow
+  target.offsetHeight;
+
+  // Animate
+  target.style.transition = '';
+  target.style.transform = '';
+  target.classList.add('active');
+
+  current.style.transition = '';
+  current.style.transform = forward ? 'translateX(-100%)' : 'translateX(100%)';
+  current.classList.remove('active');
+
+  state.currentSlide = index;
+  updateDots(index);
+}
+
+function updateDots(index) {
+  const dots = document.querySelectorAll('.dot');
+  const dotsEl = document.getElementById('progress-dots');
+  // Show dots only for slides 1–4
+  dotsEl.style.display = (index >= 1 && index <= 4) ? 'flex' : 'none';
+  dots.forEach(dot => {
+    const s = parseInt(dot.dataset.slide);
+    dot.classList.remove('active', 'done');
+    if (s === index) dot.classList.add('active');
+    else if (s < index) dot.classList.add('done');
+  });
+}
+
+// Init dots visibility
+updateDots(0);
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE 0 — Get Started
+═══════════════════════════════════════════════════════════ */
+document.getElementById('get-started-btn').addEventListener('click', () => {
+  goTo(1);
+});
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE 1 — User Type
+═══════════════════════════════════════════════════════════ */
+document.querySelectorAll('#user-type-grid .option-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('#user-type-grid .option-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    state.userType = card.dataset.value;
+    setTimeout(() => goTo(2), 300);
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE 2 — Domain
+═══════════════════════════════════════════════════════════ */
+document.querySelectorAll('#domain-grid .option-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('#domain-grid .option-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    state.domain = card.dataset.value;
+    setTimeout(() => goTo(3), 300);
+  });
+});
+
+document.getElementById('skip-domain').addEventListener('click', () => {
+  state.domain = null;
+  goTo(3);
+});
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE 3 — Brands (loaded from API)
+═══════════════════════════════════════════════════════════ */
+async function loadBrands() {
+  try {
+    const res = await fetch('http://127.0.0.1:5000/api/brands');
+    const brands = await res.json();
+    const container = document.getElementById('brand-pills');
+    brands.forEach(brand => {
+      const pill = document.createElement('div');
+      pill.className = 'pill';
+      pill.dataset.value = brand;
+      pill.textContent = brand;
+      pill.addEventListener('click', () => selectBrand(pill));
+      container.appendChild(pill);
+    });
+  } catch (e) {
+    console.warn('Could not load brands:', e);
+  }
+}
+
+function selectBrand(pill) {
+  document.querySelectorAll('#brand-pills .pill').forEach(p => p.classList.remove('selected'));
+  pill.classList.add('selected');
+  state.brand = pill.dataset.value || null;
+}
+
+document.querySelectorAll('#brand-pills .pill').forEach(p => {
+  p.addEventListener('click', () => selectBrand(p));
+});
+
+document.getElementById('brand-continue-btn').addEventListener('click', () => {
+  goTo(4);
+});
+
+loadBrands();
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE 4 — Engine + Count
+═══════════════════════════════════════════════════════════ */
+document.querySelectorAll('.engine-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.engine-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    state.engine = card.dataset.value;
+    document.getElementById('find-btn').classList.add('visible');
+  });
+});
+
+document.querySelectorAll('.count-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.count-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    state.maxResults = parseInt(btn.dataset.value);
+  });
+});
+
+document.getElementById('find-btn').addEventListener('click', () => {
+  if (!state.engine) return;
+  startSearch();
+});
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE 5 — Loading + API call
+═══════════════════════════════════════════════════════════ */
+function startSearch() {
+  goTo(5);
+  animateCounter();
+  fetchRecommendations();
+}
+
+let counterInterval = null;
+function animateCounter() {
+  const el = document.getElementById('loader-count');
+  let count = 0;
+  const target = 1200 + Math.floor(Math.random() * 300);
+  if (counterInterval) clearInterval(counterInterval);
+  counterInterval = setInterval(() => {
+    count += Math.floor(Math.random() * 40) + 10;
+    if (count >= target) { count = target; clearInterval(counterInterval); }
+    el.textContent = count.toLocaleString();
+  }, 60);
+}
+
+async function fetchRecommendations() {
+  const payload = {
+    user_type: state.userType || 'Normal User',
+    domain: state.domain || null,
+    brand: state.brand || null,
+    max_results: state.maxResults,
+    mode: state.engine,
+  };
+
+  try {
+    const res = await fetch('http://127.0.0.1:5000/api/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    // Small delay so loading screen is visible
+    setTimeout(() => showResults(data), 800);
+  } catch (err) {
+    setTimeout(() => showError(err), 800);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE 6 — Results
+═══════════════════════════════════════════════════════════ */
+function showResults(data) {
+  const { mode, results } = data;
+
+  // Summary pills
+  const summaryEl = document.getElementById('summary-pills');
+  summaryEl.innerHTML = '';
+  if (state.userType) summaryEl.innerHTML += `<span class="summary-pill">👤 ${state.userType}</span>`;
+  if (state.domain)   summaryEl.innerHTML += `<span class="summary-pill">🎯 ${state.domain}</span>`;
+  if (state.brand)    summaryEl.innerHTML += `<span class="summary-pill">🏷️ ${state.brand}</span>`;
+  summaryEl.innerHTML += `<span class="summary-pill">📦 ${state.maxResults} results</span>`;
+
+  // Mode pill
+  const modePill = document.getElementById('mode-pill');
+  modePill.className = 'mode-pill ' + mode;
+  if (mode === 'ml') modePill.textContent = '🤖 ML Engine';
+  else if (mode === 'denstream') modePill.textContent = '🌊 DenStream';
+  else modePill.textContent = '📋 Rule-Based';
+
+  // Count
+  document.getElementById('results-count').textContent =
+    `Showing ${results.length} laptop${results.length !== 1 ? 's' : ''} matched for you`;
+
+  // Cards
+  const grid = document.getElementById('results-grid');
+  grid.innerHTML = '';
+
+  if (!results || results.length === 0) {
+    grid.innerHTML = `
+      <div class="no-results" style="grid-column:1/-1">
+        <div class="no-results-icon">🔍</div>
+        <p>No laptops found for your criteria. Try different filters.</p>
+      </div>`;
+  } else {
+    results.forEach((laptop, i) => {
+      grid.appendChild(buildCard(laptop, mode, i));
+    });
+    // Animate bars after a tick
+    setTimeout(() => {
+      document.querySelectorAll('.ml-bar-fill').forEach(bar => {
+        bar.style.width = bar.dataset.pct + '%';
+      });
+    }, 100);
+  }
+
+  goTo(6);
+}
+
+function showError(err) {
+  const grid = document.getElementById('results-grid');
+  grid.innerHTML = `
+    <div class="no-results" style="grid-column:1/-1">
+      <div class="no-results-icon">⚠️</div>
+      <p>Could not connect to the API. Make sure Flask is running at http://127.0.0.1:5000</p>
+      <p style="font-size:.8rem;margin-top:.5rem;opacity:.6">${err.message}</p>
+    </div>`;
+  document.getElementById('results-count').textContent = 'Error fetching results';
+  document.getElementById('summary-pills').innerHTML = '';
+  document.getElementById('mode-pill').textContent = '';
+  goTo(6);
+}
+
+function buildCard(laptop, mode, index) {
+  const card = document.createElement('div');
+  card.className = 'laptop-card';
+
+  const price = laptop.Price
+    ? '₹' + Number(laptop.Price).toLocaleString('en-IN')
+    : 'Price N/A';
+
+  const specs = [];
+  if (laptop.RAM)          specs.push('🧠 ' + laptop.RAM);
+  if (laptop.SSD && laptop.SSD !== 'NO SSD') specs.push('💾 ' + laptop.SSD);
+  if (laptop.GPU && laptop.GPU !== 'nan')    specs.push('🎮 ' + truncate(laptop.GPU, 22));
+  if (laptop.Display)      specs.push('🖥️ ' + truncate(laptop.Display, 20));
+  if (laptop.Battery_Life && laptop.Battery_Life !== 'nan') specs.push('🔋 ' + laptop.Battery_Life);
+
+  const specTagsHTML = specs.map(s => `<span class="spec-tag">${s}</span>`).join('');
+
+  let mlBarHTML = '';
+  if ((mode === 'ml' || mode === 'denstream') && laptop.ml_score !== undefined) {
+    const pct = Math.round(laptop.ml_score * 100);
+    const barLabel = mode === 'denstream' ? 'Cluster Match' : 'ML Match';
+    const barColor = mode === 'denstream'
+      ? 'background:linear-gradient(90deg,#06b6d4,#0891b2)'
+      : 'background:linear-gradient(90deg,var(--primary),var(--accent))';
+    mlBarHTML = `
+      <div class="ml-bar-wrap">
+        <div class="ml-bar-label">
+          <span>${barLabel}</span>
+          <span>${pct}%</span>
+        </div>
+        <div class="ml-bar-track">
+          <div class="ml-bar-fill" data-pct="${pct}" style="width:0%;${barColor}"></div>
+        </div>
+      </div>`;
+    if (mode === 'denstream' && laptop.cluster_info) {
+      mlBarHTML += `<div style="font-size:.7rem;color:#06b6d4;margin-top:.4rem;opacity:.8">🌊 ${laptop.cluster_info}</div>`;
+    }
+  }
+
+  // Use a deterministic placeholder image based on brand+index
+  const imgSeed = encodeURIComponent((laptop.Brand || 'laptop') + index);
+  const imgUrl = laptop.image_url || `https://picsum.photos/seed/${imgSeed}/400/300`;
+
+  card.innerHTML = `
+    <img class="card-img" src="${imgUrl}" alt="${escHtml(laptop.Name || '')}" loading="lazy"
+         onerror="this.src='https://picsum.photos/seed/${index + 42}/400/300'">
+    <div class="card-body">
+      <span class="card-brand">${escHtml(laptop.Brand || '')}</span>
+      <div class="card-name">${escHtml(laptop.Name || 'Unknown Model')}</div>
+      <div class="card-price">${price}</div>
+      <div class="spec-tags">${specTagsHTML}</div>
+      ${mlBarHTML}
+    </div>`;
+
+  return card;
+}
+
+function truncate(str, max) {
+  return str && str.length > max ? str.slice(0, max) + '…' : str;
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   START OVER
+═══════════════════════════════════════════════════════════ */
+function resetWizard() {
+  state.userType = null;
+  state.domain = null;
+  state.brand = null;
+  state.engine = null;
+  state.maxResults = 12;
+
+  // Clear selections
+  document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('.engine-card').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('.count-btn').forEach(b => {
+    b.classList.remove('selected');
+    if (b.dataset.value === '12') b.classList.add('selected');
+  });
+  document.getElementById('find-btn').classList.remove('visible');
+
+  // Reset brand pills — keep "All Brands" selected
+  document.querySelectorAll('#brand-pills .pill').forEach(p => {
+    p.classList.remove('selected');
+    if (p.dataset.value === '') p.classList.add('selected');
+  });
+
+  goTo(0);
+}
+
+document.getElementById('start-over-btn').addEventListener('click', resetWizard);
+document.getElementById('back-to-start').addEventListener('click', resetWizard);
+
+/* ═══════════════════════════════════════════════════════════
+   KEYBOARD NAVIGATION (Escape = back)
+═══════════════════════════════════════════════════════════ */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && state.currentSlide > 0 && state.currentSlide < 5) {
+    goTo(state.currentSlide - 1);
+  }
+});
+</script>
+</body>
+</html>
