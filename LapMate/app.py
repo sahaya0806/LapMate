@@ -25,6 +25,12 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/clusters")
+def clusters_viz():
+    """Serve the cluster visualization page."""
+    return render_template("clusters.html")
+
+
 @app.route("/api/brands", methods=["GET"])
 def get_brands():
     """Return the list of available laptop brands (same for both engines)."""
@@ -81,29 +87,51 @@ def recommend():
 def get_clusters():
     """
     Return info about the DenStream micro-clusters formed from the laptop catalogue.
-    Useful for the frontend to show how many clusters were discovered and their centroids.
+    Includes centroid values (inverse-transformed to human-readable units),
+    and the count of laptops nearest to each centroid (for bubble sizing).
     """
-    centroids = denstream_recommender._centroids
-    scaler    = denstream_recommender.scaler
-    feat_cols = ["ram_gb", "ssd_gb", "gpu_vram_gb", "processor_tier", "gpu_tier", "price_norm"]
+    import numpy as np
+
+    centroids  = denstream_recommender._centroids          # (n_clusters, 6) scaled
+    scaler     = denstream_recommender.scaler
+    df         = denstream_recommender.df
+    feat_cols  = ["ram_gb", "ssd_gb", "gpu_vram_gb", "processor_tier", "gpu_tier", "price_norm"]
+
+    # Assign every laptop to its nearest centroid
+    laptop_vecs = df[feat_cols].fillna(0).values.astype(float)
+    laptop_scaled = scaler.transform(laptop_vecs)           # (n_laptops, 6)
+    # Euclidean distance from each laptop to each centroid
+    diffs = laptop_scaled[:, None, :] - centroids[None, :, :]   # (n_laptops, n_clusters, 6)
+    dist  = np.linalg.norm(diffs, axis=2)                        # (n_laptops, n_clusters)
+    assignments = dist.argmin(axis=1)                            # (n_laptops,)
+
+    # Count laptops per cluster
+    from collections import Counter
+    counts = Counter(assignments.tolist())
 
     cluster_list = []
+    max_price = float(df["Price"].max()) or 1.0
     for i, c in enumerate(centroids):
-        # Inverse-transform to get human-readable values
         raw = scaler.inverse_transform(c.reshape(1, -1))[0]
         cluster_list.append({
-            "cluster_id":    i,
-            "ram_gb":        round(float(raw[0]), 1),
-            "ssd_gb":        round(float(raw[1]), 1),
-            "gpu_vram_gb":   round(float(raw[2]), 1),
-            "processor_tier":round(float(raw[3]), 2),
-            "gpu_tier":      round(float(raw[4]), 2),
-            "price_approx":  round(float(raw[5]) * float(denstream_recommender.df["Price"].max()), -2),
+            "cluster_id":     i,
+            "ram_gb":         round(float(raw[0]), 1),
+            "ssd_gb":         round(float(raw[1]), 1),
+            "gpu_vram_gb":    round(float(raw[2]), 1),
+            "processor_tier": round(float(raw[3]), 2),
+            "gpu_tier":       round(float(raw[4]), 2),
+            "price_approx":   round(float(raw[5]) * max_price, -2),
+            "laptop_count":   counts.get(i, 0),
         })
 
+    # Also send the raw scaled centroids so the frontend can do PCA/2-D projection
+    centroids_scaled = centroids.tolist()
+
     return jsonify({
-        "total_clusters": len(cluster_list),
-        "clusters":       cluster_list,
+        "total_clusters":    len(cluster_list),
+        "clusters":          cluster_list,
+        "centroids_scaled":  centroids_scaled,
+        "feature_names":     feat_cols,
     })
 
 

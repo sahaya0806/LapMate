@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DenStream Cluster Visualisation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0b1a;
+  --card-bg:#1a1d3e;
+  --primary:#4f46e5;
+  --accent:#a78bfa;
+  --green:#34d399;
+  --amber:#f59e0b;
+  --cyan:#06b6d4;
+  --text:#e2e8f0;
+  --text-muted:#94a3b8;
+  --border:#2d3166;
+}
+html,body{
+  min-height:100%;
+  font-family:'Inter',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  overflow-x:hidden;
+}
+
+/* ── Top nav ── */
+.topbar{
+  position:sticky;top:0;z-index:100;
+  background:rgba(10,11,26,.9);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:.9rem 2rem;
+  display:flex;align-items:center;gap:1.2rem;
+}
+.back-home{
+  padding:.45rem 1.1rem;border-radius:50px;
+  border:1.5px solid var(--border);background:transparent;
+  color:var(--text-muted);font-size:.85rem;font-weight:600;
+  font-family:'Inter',sans-serif;cursor:pointer;
+  transition:all .2s;text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;
+}
+.back-home:hover{border-color:var(--primary);color:var(--text)}
+.topbar-title{
+  font-size:1.2rem;font-weight:800;
+  background:linear-gradient(135deg,#fff,var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.topbar-sub{font-size:.82rem;color:var(--text-muted);margin-left:auto}
+
+/* ── Summary strip ── */
+.summary-strip{
+  display:flex;gap:1rem;padding:1.2rem 2rem;
+  flex-wrap:wrap;
+  border-bottom:1px solid var(--border);
+  background:rgba(26,29,62,.4);
+}
+.stat-chip{
+  display:flex;flex-direction:column;gap:.15rem;
+  background:var(--card-bg);border:1px solid var(--border);
+  border-radius:12px;padding:.6rem 1.1rem;min-width:110px;
+}
+.stat-label{font-size:.7rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.stat-value{font-size:1.4rem;font-weight:800;color:var(--cyan)}
+
+/* ── Layout ── */
+.page{max-width:1440px;margin:0 auto;padding:2rem}
+.section-heading{
+  font-size:1rem;font-weight:700;color:var(--accent);
+  text-transform:uppercase;letter-spacing:.08em;
+  margin-bottom:1rem;display:flex;align-items:center;gap:.5rem;
+}
+.section-heading::before{content:'';display:block;width:4px;height:1em;background:var(--accent);border-radius:2px}
+
+/* ── Chart grid ── */
+.chart-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem}
+.chart-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem;margin-bottom:2rem}
+.chart-full{margin-bottom:2rem}
+@media(max-width:900px){.chart-grid-2,.chart-grid-3{grid-template-columns:1fr}}
+
+.chart-card{
+  background:var(--card-bg);border:1px solid var(--border);
+  border-radius:20px;overflow:hidden;
+}
+.chart-card-header{
+  padding:.9rem 1.3rem;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;gap:.5rem;
+}
+.chart-card-title{font-size:.9rem;font-weight:700;color:var(--text)}
+.chart-card-badge{
+  font-size:.7rem;font-weight:700;padding:.2rem .6rem;border-radius:50px;
+  background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.3);color:var(--cyan);
+}
+.plotly-wrap{padding:.5rem}
+
+/* ── Cluster table ── */
+.table-wrap{overflow-x:auto;border-radius:16px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+thead th{
+  background:rgba(79,70,229,.15);color:var(--accent);
+  padding:.75rem 1rem;text-align:left;font-weight:700;
+  border-bottom:1px solid var(--border);white-space:nowrap;
+}
+tbody tr{border-bottom:1px solid rgba(45,49,102,.5);transition:background .15s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:rgba(79,70,229,.08)}
+tbody td{padding:.65rem 1rem;color:var(--text-muted);vertical-align:middle}
+tbody td:first-child{color:var(--text);font-weight:600}
+.bar-cell{display:flex;align-items:center;gap:.6rem}
+.mini-bar{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--primary),var(--accent));flex-shrink:0}
+.tier-dot{
+  display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:.4rem;
+}
+
+/* ── Loading overlay ── */
+#loading{
+  position:fixed;inset:0;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:1.2rem;z-index:999;
+}
+.spinner-ring{
+  width:56px;height:56px;border-radius:50%;
+  border:4px solid var(--border);
+  border-top-color:var(--cyan);
+  animation:spin .9s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:var(--text-muted);font-size:1rem;font-weight:500}
+#loading.hidden{display:none}
+
+/* ── Error banner ── */
+#error-banner{
+  display:none;background:rgba(239,68,68,.15);border:1px solid #ef4444;
+  border-radius:12px;padding:1rem 1.5rem;color:#fca5a5;
+  font-size:.9rem;margin-bottom:1.5rem;
+}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner-ring"></div>
+  <p class="loading-text">Loading cluster data…</p>
+</div>
+
+<!-- ── Nav ── -->
+<nav class="topbar">
+  <a class="back-home" href="/">← Back</a>
+  <span class="topbar-title">🌊 DenStream Cluster Visualisation</span>
+  <span class="topbar-sub" id="topbar-sub">Loading…</span>
+</nav>
+
+<!-- ── Summary strip ── -->
+<div class="summary-strip">
+  <div class="stat-chip">
+    <span class="stat-label">Total Clusters</span>
+    <span class="stat-value" id="stat-clusters">—</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-label">Laptops</span>
+    <span class="stat-value" id="stat-laptops">—</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-label">Avg RAM (GB)</span>
+    <span class="stat-value" id="stat-ram">—</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-label">Avg SSD (GB)</span>
+    <span class="stat-value" id="stat-ssd">—</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-label">Avg Price (₹)</span>
+    <span class="stat-value" id="stat-price">—</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-label">Avg GPU VRAM</span>
+    <span class="stat-value" id="stat-vram">—</span>
+  </div>
+</div>
+
+<!-- ── Main content ── -->
+<main class="page">
+  <div id="error-banner"></div>
+
+  <!-- Row 1: Bubble + Bar -->
+  <div class="chart-grid-2">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">RAM vs Price — Cluster Bubbles</span>
+        <span class="chart-card-badge">Bubble = laptop count</span>
+      </div>
+      <div class="plotly-wrap" id="bubble-chart"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Laptops per Cluster</span>
+        <span class="chart-card-badge">Distribution</span>
+      </div>
+      <div class="plotly-wrap" id="bar-count-chart"></div>
+    </div>
+  </div>
+
+  <!-- Row 2: Stacked feature bar + Scatter SSD vs GPU VRAM -->
+  <div class="chart-grid-2">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Feature Profile per Cluster</span>
+        <span class="chart-card-badge">Normalised</span>
+      </div>
+      <div class="plotly-wrap" id="stacked-bar-chart"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">SSD vs GPU VRAM</span>
+        <span class="chart-card-badge">Scatter</span>
+      </div>
+      <div class="plotly-wrap" id="scatter-ssd-gpu"></div>
+    </div>
+  </div>
+
+  <!-- Row 3: 3-D scatter (RAM / Price / GPU VRAM) -->
+  <div class="chart-full">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">3-D View — RAM × Price × GPU VRAM</span>
+        <span class="chart-card-badge">Interactive · Drag to rotate</span>
+      </div>
+      <div class="plotly-wrap" id="scatter3d-chart"></div>
+    </div>
+  </div>
+
+  <!-- Row 4: Heatmap + Radar -->
+  <div class="chart-grid-2">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Cluster Feature Heatmap</span>
+        <span class="chart-card-badge">Normalised 0-1</span>
+      </div>
+      <div class="plotly-wrap" id="heatmap-chart"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Top-5 Clusters — Radar</span>
+        <span class="chart-card-badge">Feature balance</span>
+      </div>
+      <div class="plotly-wrap" id="radar-chart"></div>
+    </div>
+  </div>
+
+  <!-- Processor & GPU tier distribution -->
+  <div class="chart-grid-2">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Processor Tier Distribution</span>
+        <span class="chart-card-badge">Across clusters</span>
+      </div>
+      <div class="plotly-wrap" id="proc-tier-chart"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">GPU Tier Distribution</span>
+        <span class="chart-card-badge">Across clusters</span>
+      </div>
+      <div class="plotly-wrap" id="gpu-tier-chart"></div>
+    </div>
+  </div>
+
+  <!-- Cluster table -->
+  <p class="section-heading" style="margin-top:1rem">Cluster Details Table</p>
+  <div class="table-wrap" id="cluster-table-wrap">
+    <table id="cluster-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>RAM (GB)</th>
+          <th>SSD (GB)</th>
+          <th>GPU VRAM (GB)</th>
+          <th>CPU Tier</th>
+          <th>GPU Tier</th>
+          <th>≈ Price (₹)</th>
+          <th>Laptops</th>
+          <th>Segment</th>
+        </tr>
+      </thead>
+      <tbody id="cluster-tbody"></tbody>
+    </table>
+  </div>
+
+</main>
+
+<script>
+/* ──────────────────────────────────────────────────────
+   CONSTANTS & HELPERS
+────────────────────────────────────────────────────── */
+const PALETTE = [
+  '#4f46e5','#a78bfa','#06b6d4','#34d399','#f59e0b',
+  '#f43f5e','#8b5cf6','#14b8a6','#fb923c','#64748b',
+  '#ec4899','#22d3ee','#84cc16','#e879f9','#fbbf24',
+  '#38bdf8','#4ade80','#f87171','#c084fc','#67e8f9',
+];
+const PLOTLY_LAYOUT_BASE = {
+  paper_bgcolor: 'rgba(0,0,0,0)',
+  plot_bgcolor:  'rgba(0,0,0,0)',
+  font:          { family: 'Inter, sans-serif', color: '#94a3b8', size: 11 },
+  margin:        { t: 20, r: 20, b: 50, l: 50 },
+  xaxis: { gridcolor: 'rgba(45,49,102,.5)', zerolinecolor: 'rgba(45,49,102,.7)' },
+  yaxis: { gridcolor: 'rgba(45,49,102,.5)', zerolinecolor: 'rgba(45,49,102,.7)' },
+  legend:{ bgcolor: 'rgba(0,0,0,0)', bordercolor: 'rgba(45,49,102,.5)', borderwidth: 1 },
+  hoverlabel: { bgcolor: '#1a1d3e', bordercolor: '#4f46e5', font: { color: '#e2e8f0' } },
+};
+const CONFIG = { responsive: true, displayModeBar: false };
+
+function avg(arr) { return arr.length ? arr.reduce((a,b) => a+b, 0) / arr.length : 0; }
+
+function segmentLabel(c) {
+  const ram = c.ram_gb, ssd = c.ssd_gb, vram = c.gpu_vram_gb,
+        cpu = c.processor_tier, gpu = c.gpu_tier;
+  if (gpu >= 3 && cpu >= 4) return '🔥 Extreme Gaming / ML';
+  if (gpu >= 2 && cpu >= 3) return '🎮 High-End Gaming';
+  if (gpu >= 1 && vram >= 4) return '⚡ Mid-Range Gaming';
+  if (ram >= 16 && cpu >= 3 && gpu === 0) return '💻 Pro Productivity';
+  if (ram >= 16 && cpu >= 3) return '🤖 AI / Data Science';
+  if (ram >= 8 && cpu >= 2) return '📐 General Mid-Range';
+  if (cpu <= 1 && ram <= 4) return '📗 Budget Entry';
+  return '🏷️ Budget General';
+}
+
+/* ──────────────────────────────────────────────────────
+   FETCH & RENDER
+────────────────────────────────────────────────────── */
+async function init() {
+  try {
+    const res = await fetch('/api/clusters');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    document.getElementById('loading').classList.add('hidden');
+    render(data);
+  } catch(e) {
+    document.getElementById('loading').classList.add('hidden');
+    const banner = document.getElementById('error-banner');
+    banner.style.display = 'block';
+    banner.textContent = '⚠️ Could not load cluster data. Make sure the Flask server is running on port 5000. (' + e.message + ')';
+  }
+}
+
+function render(data) {
+  const clusters = data.clusters;
+  const n = clusters.length;
+
+  /* ── Summary strip ── */
+  document.getElementById('topbar-sub').textContent =
+    `${n} micro-clusters · ${data.feature_names.join(', ')}`;
+  document.getElementById('stat-clusters').textContent = n;
+  const totalLaptops = clusters.reduce((s,c) => s + c.laptop_count, 0);
+  document.getElementById('stat-laptops').textContent = totalLaptops.toLocaleString();
+  document.getElementById('stat-ram').textContent  = avg(clusters.map(c=>c.ram_gb)).toFixed(1);
+  document.getElementById('stat-ssd').textContent  = avg(clusters.map(c=>c.ssd_gb)).toFixed(0);
+  document.getElementById('stat-price').textContent = '₹' + Math.round(avg(clusters.map(c=>c.price_approx))).toLocaleString();
+  document.getElementById('stat-vram').textContent  = avg(clusters.map(c=>c.gpu_vram_gb)).toFixed(1) + ' GB';
+
+  /* Helper to generate nicely capped bubble sizes */
+  const maxCount = Math.max(...clusters.map(c => c.laptop_count), 1);
+  const bubbleSize = c => Math.max(10, Math.round(50 * (c.laptop_count / maxCount)));
+
+  /* ── 1. Bubble chart — RAM vs Price ── */
+  Plotly.newPlot('bubble-chart', [{
+    type: 'scatter',
+    mode: 'markers+text',
+    x: clusters.map(c => c.ram_gb),
+    y: clusters.map(c => c.price_approx),
+    text: clusters.map(c => '#' + c.cluster_id),
+    textposition: 'top center',
+    marker: {
+      size: clusters.map(bubbleSize),
+      color: clusters.map((_,i) => PALETTE[i % PALETTE.length]),
+      opacity: 0.82,
+      line: { color: 'rgba(255,255,255,.25)', width: 1 },
+    },
+    customdata: clusters.map(c => [
+      c.cluster_id, c.laptop_count, c.ssd_gb, c.gpu_vram_gb,
+      c.processor_tier, c.gpu_tier, segmentLabel(c)
+    ]),
+    hovertemplate:
+      '<b>Cluster #%{customdata[0]}</b><br>' +
+      'RAM: %{x} GB<br>Price: ₹%{y:,.0f}<br>' +
+      'SSD: %{customdata[2]} GB · GPU VRAM: %{customdata[3]} GB<br>' +
+      'CPU Tier: %{customdata[4]} · GPU Tier: %{customdata[5]}<br>' +
+      'Laptops: %{customdata[1]}<br><i>%{customdata[6]}</i><extra></extra>',
+  }], {
+    ...PLOTLY_LAYOUT_BASE,
+    xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis, title: 'RAM (GB)' },
+    yaxis: { ...PLOTLY_LAYOUT_BASE.yaxis, title: 'Approx Price (₹)' },
+    height: 380,
+  }, CONFIG);
+
+  /* ── 2. Bar: laptops per cluster ── */
+  const sorted = [...clusters].sort((a,b) => b.laptop_count - a.laptop_count);
+  Plotly.newPlot('bar-count-chart', [{
+    type: 'bar',
+    orientation: 'h',
+    x: sorted.map(c => c.laptop_count),
+    y: sorted.map(c => 'Cluster #' + c.cluster_id),
+    marker: {
+      color: sorted.map((_,i) => PALETTE[i % PALETTE.length]),
+      opacity: 0.85,
+    },
+    text: sorted.map(c => c.laptop_count),
+    textposition: 'outside',
+    hovertemplate: 'Cluster #%{y}: %{x} laptops<extra></extra>',
+  }], {
+    ...PLOTLY_LAYOUT_BASE,
+    xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis, title: 'Laptops' },
+    yaxis: { ...PLOTLY_LAYOUT_BASE.yaxis, title: '', autorange: 'reversed' },
+    height: 380,
+    margin: { t: 20, r: 50, b: 50, l: 100 },
+  }, CONFIG);
+
+  /* ── 3. Stacked normalised feature bar ── */
+  const featureMax = {
+    ram_gb: 64, ssd_gb: 2048, gpu_vram_gb: 16, processor_tier: 4, gpu_tier: 3
+  };
+  const featureLabels = ['RAM', 'SSD', 'GPU VRAM', 'CPU Tier', 'GPU Tier'];
+  const featureKeys   = ['ram_gb', 'ssd_gb', 'gpu_vram_gb', 'processor_tier', 'gpu_tier'];
+  const featureColors = ['#4f46e5','#06b6d4','#f59e0b','#34d399','#f43f5e'];
+
+  const stackTraces = featureKeys.map((key, fi) => ({
+    type: 'bar',
+    name: featureLabels[fi],
+    x: clusters.map(c => 'C' + c.cluster_id),
+    y: clusters.map(c => parseFloat(((c[key] / featureMax[key]) * 100).toFixed(1))),
+    marker: { color: featureColors[fi], opacity: 0.85 },
+    hovertemplate: featureLabels[fi] + ': %{y:.1f}%<extra></extra>',
+  }));
+
+  Plotly.newPlot('stacked-bar-chart', stackTraces, {
+    ...PLOTLY_LAYOUT_BASE,
+    barmode: 'stack',
+    xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis, title: 'Cluster' },
+    yaxis: { ...PLOTLY_LAYOUT_BASE.yaxis, title: 'Normalised Score (%)' },
+    height: 380,
+    legend: { ...PLOTLY_LAYOUT_BASE.legend, orientation: 'h', y: -0.2 },
+    margin: { t: 20, r: 20, b: 80, l: 55 },
+  }, CONFIG);
+
+  /* ── 4. Scatter: SSD vs GPU VRAM ── */
+  Plotly.newPlot('scatter-ssd-gpu', [{
+    type: 'scatter',
+    mode: 'markers+text',
+    x: clusters.map(c => c.ssd_gb),
+    y: clusters.map(c => c.gpu_vram_gb),
+    text: clusters.map(c => '#' + c.cluster_id),
+    textposition: 'top center',
+    marker: {
+      size: 14,
+      color: clusters.map((_,i) => PALETTE[i % PALETTE.length]),
+      opacity: 0.85,
+      symbol: 'circle',
+      line: { color: 'rgba(255,255,255,.3)', width: 1 },
+    },
+    customdata: clusters.map(c => [c.cluster_id, c.laptop_count, segmentLabel(c)]),
+    hovertemplate:
+      '<b>Cluster #%{customdata[0]}</b><br>' +
+      'SSD: %{x} GB · GPU VRAM: %{y} GB<br>' +
+      'Laptops: %{customdata[1]}<br><i>%{customdata[2]}</i><extra></extra>',
+  }], {
+    ...PLOTLY_LAYOUT_BASE,
+    xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis, title: 'SSD (GB)' },
+    yaxis: { ...PLOTLY_LAYOUT_BASE.yaxis, title: 'GPU VRAM (GB)' },
+    height: 380,
+  }, CONFIG);
+
+  /* ── 5. 3-D scatter ── */
+  Plotly.newPlot('scatter3d-chart', [{
+    type: 'scatter3d',
+    mode: 'markers+text',
+    x: clusters.map(c => c.ram_gb),
+    y: clusters.map(c => c.price_approx),
+    z: clusters.map(c => c.gpu_vram_gb),
+    text: clusters.map(c => '#' + c.cluster_id),
+    textposition: 'top center',
+    marker: {
+      size: clusters.map(c => Math.max(5, Math.round(18 * (c.laptop_count / maxCount)))),
+      color: clusters.map((_,i) => PALETTE[i % PALETTE.length]),
+      opacity: 0.85,
+      line: { color: 'rgba(255,255,255,.2)', width: 0.5 },
+    },
+    customdata: clusters.map(c => [c.cluster_id, c.laptop_count, c.ssd_gb, segmentLabel(c)]),
+    hovertemplate:
+      '<b>Cluster #%{customdata[0]}</b><br>' +
+      'RAM: %{x} GB · Price: ₹%{y:,.0f} · GPU VRAM: %{z} GB<br>' +
+      'SSD: %{customdata[2]} GB · Laptops: %{customdata[1]}<br>' +
+      '<i>%{customdata[3]}</i><extra></extra>',
+  }], {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor:  'rgba(0,0,0,0)',
+    font: { family: 'Inter, sans-serif', color: '#94a3b8', size: 11 },
+    scene: {
+      bgcolor: 'rgba(0,0,0,0)',
+      xaxis: { title: 'RAM (GB)', gridcolor: 'rgba(45,49,102,.7)', color: '#94a3b8' },
+      yaxis: { title: 'Price (₹)', gridcolor: 'rgba(45,49,102,.7)', color: '#94a3b8' },
+      zaxis: { title: 'GPU VRAM (GB)', gridcolor: 'rgba(45,49,102,.7)', color: '#94a3b8' },
+    },
+    margin: { t: 10, r: 10, b: 10, l: 10 },
+    height: 480,
+    hoverlabel: { bgcolor: '#1a1d3e', bordercolor: '#4f46e5', font: { color: '#e2e8f0' } },
+  }, CONFIG);
+
+  /* ── 6. Heatmap ── */
+  const hmFeatureKeys   = ['ram_gb','ssd_gb','gpu_vram_gb','processor_tier','gpu_tier','price_approx'];
+  const hmFeatureLabels = ['RAM','SSD','GPU VRAM','CPU Tier','GPU Tier','Price'];
+  const hmMaxValues     = [64, 2048, 16, 4, 3, Math.max(...clusters.map(c=>c.price_approx), 1)];
+  const hmZ = hmFeatureKeys.map((key, fi) =>
+    clusters.map(c => parseFloat((c[key] / hmMaxValues[fi]).toFixed(3)))
+  );
+
+  Plotly.newPlot('heatmap-chart', [{
+    type: 'heatmap',
+    z: hmZ,
+    x: clusters.map(c => 'C' + c.cluster_id),
+    y: hmFeatureLabels,
+    colorscale: [
+      [0, '#0a0b1a'], [0.25, '#1a1d3e'], [0.5, '#4f46e5'],
+      [0.75, '#a78bfa'], [1, '#06b6d4']
+    ],
+    showscale: true,
+    hovertemplate: '<b>%{y}</b><br>Cluster %{x}: %{z:.2f}<extra></extra>',
+    colorbar: { thickness: 14, outlinewidth: 0, tickcolor: '#94a3b8', tickfont: { color: '#94a3b8' } },
+  }], {
+    ...PLOTLY_LAYOUT_BASE,
+    xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis, title: '' },
+    yaxis: { ...PLOTLY_LAYOUT_BASE.yaxis, title: '', automargin: true },
+    height: 360,
+    margin: { t: 20, r: 80, b: 50, l: 90 },
+  }, CONFIG);
+
+  /* ── 7. Radar — top-5 by laptop count ── */
+  const top5 = [...clusters].sort((a,b) => b.laptop_count - a.laptop_count).slice(0, 5);
+  const radarAxes = ['RAM','SSD','GPU VRAM','CPU Tier','GPU Tier'];
+  const radarMaxVal = [64, 2048, 16, 4, 3];
+  const radarKeys   = ['ram_gb','ssd_gb','gpu_vram_gb','processor_tier','gpu_tier'];
+
+  const radarTraces = top5.map((c, i) => {
+    const r = radarKeys.map((k, ki) => parseFloat((c[k] / radarMaxVal[ki]).toFixed(3)));
+    r.push(r[0]); // close the polygon
+    const axes = [...radarAxes, radarAxes[0]];
+    return {
+      type: 'scatterpolar',
+      r,
+      theta: axes,
+      name: 'Cluster #' + c.cluster_id + ' (' + c.laptop_count + ')',
+      fill: 'toself',
+      opacity: 0.55,
+      line: { color: PALETTE[i % PALETTE.length] },
+      fillcolor: PALETTE[i % PALETTE.length],
+    };
+  });
+
+  Plotly.newPlot('radar-chart', radarTraces, {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor:  'rgba(0,0,0,0)',
+    font: { family: 'Inter, sans-serif', color: '#94a3b8', size: 10 },
+    polar: {
+      bgcolor: 'rgba(0,0,0,0)',
+      radialaxis: { visible: true, range: [0,1], gridcolor: 'rgba(45,49,102,.7)', color:'#94a3b8' },
+      angularaxis: { gridcolor: 'rgba(45,49,102,.5)', color: '#94a3b8' },
+    },
+    legend: { bgcolor: 'rgba(0,0,0,0)', font: { color: '#94a3b8', size: 10 } },
+    margin: { t: 30, r: 30, b: 30, l: 30 },
+    height: 360,
+    hoverlabel: { bgcolor: '#1a1d3e', bordercolor: '#4f46e5', font: { color: '#e2e8f0' } },
+  }, CONFIG);
+
+  /* ── 8. Processor tier bar ── */
+  Plotly.newPlot('proc-tier-chart', [{
+    type: 'bar',
+    x: clusters.map(c => 'C' + c.cluster_id),
+    y: clusters.map(c => c.processor_tier),
+    marker: {
+      color: clusters.map(c => {
+        if (c.processor_tier >= 4) return '#34d399';
+        if (c.processor_tier >= 3) return '#4f46e5';
+        if (c.processor_tier >= 2) return '#f59e0b';
+        return '#ef4444';
+      }),
+      opacity: 0.85,
+    },
+    hovertemplate: 'Cluster %{x}<br>CPU Tier: %{y:.2f}<extra></extra>',
+  }], {
+    ...PLOTLY_LAYOUT_BASE,
+    xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis, title: 'Cluster' },
+    yaxis: { ...PLOTLY_LAYOUT_BASE.yaxis, title: 'Processor Tier (1–4)', range: [0, 4.3] },
+    height: 320,
+    annotations: [
+      { x: -0.5, y: 1, text: 'Tier 1 Budget', showarrow: false, font: { color:'#64748b', size:9 }, xref:'paper', yref:'y' },
+      { x: -0.5, y: 2, text: 'Tier 2 Mid',    showarrow: false, font: { color:'#64748b', size:9 }, xref:'paper', yref:'y' },
+      { x: -0.5, y: 3, text: 'Tier 3 High',   showarrow: false, font: { color:'#64748b', size:9 }, xref:'paper', yref:'y' },
+      { x: -0.5, y: 4, text: 'Tier 4 Pro',    showarrow: false, font: { color:'#64748b', size:9 }, xref:'paper', yref:'y' },
+    ],
+  }, CONFIG);
+
+  /* ── 9. GPU tier bar ── */
+  Plotly.newPlot('gpu-tier-chart', [{
+    type: 'bar',
+    x: clusters.map(c => 'C' + c.cluster_id),
+    y: clusters.map(c => c.gpu_tier),
+    marker: {
+      color: clusters.map(c => {
+        if (c.gpu_tier >= 3) return '#f43f5e';
+        if (c.gpu_tier >= 2) return '#f59e0b';
+        if (c.gpu_tier >= 1) return '#06b6d4';
+        return '#2d3166';
+      }),
+      opacity: 0.85,
+    },
+    hovertemplate: 'Cluster %{x}<br>GPU Tier: %{y:.2f}<extra></extra>',
+  }], {
+    ...PLOTLY_LAYOUT_BASE,
+    xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis, title: 'Cluster' },
+    yaxis: { ...PLOTLY_LAYOUT_BASE.yaxis, title: 'GPU Tier (0–3)', range: [0, 3.4] },
+    height: 320,
+  }, CONFIG);
+
+  /* ── Table ── */
+  const tbody = document.getElementById('cluster-tbody');
+  const maxRam = Math.max(...clusters.map(c=>c.ram_gb), 1);
+  const maxSsd = Math.max(...clusters.map(c=>c.ssd_gb), 1);
+  const maxPx  = Math.max(...clusters.map(c=>c.price_approx), 1);
+
+  clusters.forEach((c, i) => {
+    const tr = document.createElement('tr');
+    const color = PALETTE[i % PALETTE.length];
+    tr.innerHTML = `
+      <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:.5rem"></span>#${c.cluster_id}</td>
+      <td>
+        <div class="bar-cell">
+          <div class="mini-bar" style="width:${Math.round(60*(c.ram_gb/maxRam))}px;background:${color}"></div>
+          <span>${c.ram_gb}</span>
+        </div>
+      </td>
+      <td>
+        <div class="bar-cell">
+          <div class="mini-bar" style="width:${Math.round(60*(c.ssd_gb/maxSsd))}px;background:${color}"></div>
+          <span>${c.ssd_gb}</span>
+        </div>
+      </td>
+      <td>${c.gpu_vram_gb}</td>
+      <td>${tierLabel('cpu', c.processor_tier)}</td>
+      <td>${tierLabel('gpu', c.gpu_tier)}</td>
+      <td>
+        <div class="bar-cell">
+          <div class="mini-bar" style="width:${Math.round(60*(c.price_approx/maxPx))}px;background:${color}"></div>
+          <span>₹${c.price_approx.toLocaleString()}</span>
+        </div>
+      </td>
+      <td><strong style="color:${color}">${c.laptop_count}</strong></td>
+      <td style="font-size:.78rem">${segmentLabel(c)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function tierLabel(type, val) {
+  if (type === 'cpu') {
+    const labels = ['','Budget','Mid-range','High-end','Pro'];
+    const colors = ['','#ef4444','#f59e0b','#4f46e5','#34d399'];
+    const t = Math.round(val);
+    return `<span class="tier-dot" style="background:${colors[t]||'#64748b'}"></span>${labels[t]||val}`;
+  } else {
+    const labels = ['Integrated','Entry','Mid','High'];
+    const colors = ['#2d3166','#06b6d4','#f59e0b','#f43f5e'];
+    const t = Math.round(val);
+    return `<span class="tier-dot" style="background:${colors[t]||'#64748b'}"></span>${labels[t]||val}`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
